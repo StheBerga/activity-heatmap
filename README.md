@@ -1,10 +1,26 @@
-# Running heatmap
+# Activity heatmap
 
-A GitHub-style calendar of my running activity, generated automatically from Garmin FIT files.
+A GitHub-style calendar visualizing my daily physical activity time.
 
-![Running activity heatmap](running-heatmap.svg)
+![Activity heatmap](running-heatmap.svg)
 
-The image is regenerated from the private source repository. Only the rendered SVG is published here; the original FIT files and intermediate activity data remain private.
+The heatmap is automatically generated from Garmin FIT activities and
+historical activity records. Only the rendered SVG is published here; original
+activity files and intermediate datasets remain private.
 
-The heatmap covers a rolling 365-day window. Each active day is coloured according to its total running distance relative to the busiest day in that window.
+## What does it show?
 
+Each calendar square represents one day. Its intensity corresponds to the total
+elapsed time spent exercising that day, aggregated across all activities.
+Multiple activities performed on the same day are summed together.
+
+## Data processing
+
+- All supported Garmin activity types are included, not just running.
+- Historical activity records are integrated with Garmin FIT exports.
+- Activity durations are summed in seconds and expressed to Quilt as decimal
+  hours.
+- Dates are assigned using the Europe/Rome timezone.
+- The heatmap covers a rolling 365-day window.
+
+The image is automatically regenerated using GitHub Actions.

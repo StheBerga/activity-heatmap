@@ -1,0 +1,178 @@
+name: Update activity heatmap
+
+on:
+  # 03:17 UTC daily (04:17 in Rome during winter, 05:17 during summer).
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: activity-heatmap-update
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out public pipeline repository
+        uses: actions/checkout@v7
+
+      - name: Check out only the private historical CSV
+        uses: actions/checkout@v7
+        with:
+          repository: StheBerga/running-heatmap-data
+          ref: main
+          token: ${{ secrets.HEATMAP_DATA_READ_TOKEN }}
+          path: private-data
+          persist-credentials: false
+          sparse-checkout: |
+            data/historical_activities.csv
+          sparse-checkout-cone-mode: false
+
+      - name: Verify required secrets and private data
+        env:
+          INTERVALS_API_KEY: ${{ secrets.INTERVALS_API_KEY }}
+          HEATMAP_DATA_READ_TOKEN: ${{ secrets.HEATMAP_DATA_READ_TOKEN }}
+        shell: bash
+        run: |
+          test -n "$INTERVALS_API_KEY" || {
+            echo "::error::INTERVALS_API_KEY is not configured."
+            exit 1
+          }
+          test -n "$HEATMAP_DATA_READ_TOKEN" || {
+            echo "::error::HEATMAP_DATA_READ_TOKEN is not configured."
+            exit 1
+          }
+          test -s private-data/data/historical_activities.csv || {
+            echo "::error::Private historical CSV was not checked out."
+            exit 1
+          }
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: bash
+        run: |
+          Rscript - <<'RS'
+          options(repos = c(
+            grimbough = "https://grimbough.r-universe.dev",
+            CRAN = "https://cloud.r-project.org"
+          ))
+          install.packages(c("FITfileR", "dplyr"))
+          for (package in c("FITfileR", "dplyr")) {
+            if (!requireNamespace(package, quietly = TRUE)) {
+              stop(package, " installation failed.", call. = FALSE)
+            }
+          }
+          RS
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Test synchronization and renderer helpers
+        run: python -m unittest discover -s python -p 'test_*.py' -v
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r python/requirements.txt
+
+      - name: Download FIT activities from Intervals.icu
+        env:
+          INTERVALS_API_KEY: ${{ secrets.INTERVALS_API_KEY }}
+        run: |
+          python python/sync_intervals.py \
+            --historical-csv private-data/data/historical_activities.csv \
+            --output-dir "$RUNNER_TEMP/intervals-fit" \
+            --timezone Europe/Rome \
+            --window-days 365
+          echo "ACTIVITIES_DIR=$RUNNER_TEMP/intervals-fit" >> "$GITHUB_ENV"
+
+      - name: Process FIT and historical activities
+        shell: bash
+        run: |
+          Rscript - <<'RS'
+          source("R/fit_to_activity.R")
+          source("R/process_activities.R")
+
+          output_file <- file.path(
+            Sys.getenv("RUNNER_TEMP"), "daily-activities.csv"
+          )
+          result <- process_activities(
+            activities_dir = Sys.getenv("ACTIVITIES_DIR"),
+            historical_csv = "private-data/data/historical_activities.csv",
+            window_days = 365L,
+            timezone = "Europe/Rome",
+            output_file = output_file
+          )
+
+          if (nrow(result$parse_errors) > 0L) {
+            print(result$parse_errors, row.names = FALSE)
+            stop(
+              "One or more FIT files could not be parsed. ",
+              "Refusing to publish an incomplete heatmap.",
+              call. = FALSE
+            )
+          }
+          if (!file.exists(output_file) || file.info(output_file)$size == 0L) {
+            stop("Daily activity CSV was not created.", call. = FALSE)
+          }
+
+          cat(
+            "FIT activities in window:", nrow(result$fit_activities), "\n",
+            "Historical activities in window:",
+            nrow(result$historical_activities), "\n",
+            "Total activities in window:", nrow(result$activities), "\n",
+            "Active days:", nrow(result$summary), "\n",
+            "Window:", result$window[["start"]], "to",
+            result$window[["end"]], "\n"
+          )
+          RS
+
+      - name: Remove temporary FIT downloads
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/intervals-fit"
+
+      - name: Render activity heatmap
+        run: |
+          python python/render_heatmap.py "$RUNNER_TEMP/daily-activities.csv" \
+            --timezone Europe/Rome \
+            --theme dark \
+            --label "Daily moving time (hours)" \
+            --week-start sunday \
+            --steps 0.5 \
+            --month-label-font-size 9 \
+            --weekday-label-font-size 9 \
+            --output "$GITHUB_WORKSPACE/running-heatmap.svg"
+          test -s running-heatmap.svg
+          grep -q '<svg' running-heatmap.svg
+
+      - name: Remove temporary daily summary
+        if: always()
+        run: rm -f "$RUNNER_TEMP/daily-activities.csv"
+
+      - name: Publish only the SVG to main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- running-heatmap.svg
+          if git diff --cached --quiet; then
+            echo "The heatmap is unchanged; nothing to publish."
+            exit 0
+          fi
+          git commit -m "Update activity heatmap (SVG)"
+          git push origin HEAD:main

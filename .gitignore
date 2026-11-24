@@ -1,0 +1,21 @@
+# R / RStudio
+.Rhistory
+.RData
+.Rproj.user/
+.Ruserdata
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local private checkout and temporary pipeline output
+/private-data/
+/intervals-fit/
+/daily-activities.csv
+/daily-running*.csv
+/daily-summary*.csv

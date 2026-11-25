@@ -1,9 +1,8 @@
 name: Update activity heatmap
 
 on:
-  # 03:17 UTC daily (04:17 in Rome during winter, 05:17 during summer).
   schedule:
-    - cron: "17 3 * * *"
+    - cron: '05 8 * * 0-6'
   workflow_dispatch:
 
 permissions:
@@ -14,8 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-publish:
-    if: github.ref == 'refs/heads/main'
+  cron-schedule:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

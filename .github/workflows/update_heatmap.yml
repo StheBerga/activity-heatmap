@@ -2,7 +2,9 @@ name: Update activity heatmap
 
 on:
   schedule:
-    - cron: '05 8 * * 0-6'
+    - cron: '30 9 * * *'
+      timezone: 'Europe/Rome'
+
   workflow_dispatch:
 
 permissions:
@@ -18,6 +20,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Check scheduled execution
+        run: |
+          echo "Workflow triggered successfully!"
+          echo "UTC time:"
+          date -u
+          echo "Rome time:"
+          TZ=Europe/Rome date
+
       - name: Check out public pipeline repository
         uses: actions/checkout@v7
 

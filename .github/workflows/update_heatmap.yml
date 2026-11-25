@@ -2,7 +2,7 @@ name: Update activity heatmap
 
 on:
   schedule:
-    - cron: '30 9 * * *'
+    - cron: '45 10 * * *'
       timezone: 'Europe/Rome'
 
   workflow_dispatch:
@@ -21,13 +21,17 @@ jobs:
 
     steps:
       - name: Check scheduled execution
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
-          echo "Workflow triggered successfully!"
+          echo "Event: $EVENT_NAME"
+          echo "Schedule: $SCHEDULE"
           echo "UTC time:"
           date -u
           echo "Rome time:"
           TZ=Europe/Rome date
-
+          
       - name: Check out public pipeline repository
         uses: actions/checkout@v7
 

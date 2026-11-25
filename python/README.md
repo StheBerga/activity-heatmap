@@ -52,10 +52,10 @@ The R processing layer writes a daily CSV with exactly two columns:
 python python/render_heatmap.py /path/to/daily-activities.csv \
   --timezone Europe/Rome \
   --theme dark \
-  --label "Daily moving time (hours)" \
+  --label "Activity time (hours)" \
   --week-start sunday \
   --steps 0.5 \
-  --output running-heatmap.svg
+  --output activity-heatmap.svg
 ```
 
 The output is a vector SVG. Only this SVG is copied to the public repository.

@@ -2,7 +2,7 @@
 
 A GitHub-style calendar showing daily timer-active physical activity time.
 
-![Activity heatmap](running-heatmap.svg)
+![Activity heatmap](activity-heatmap.svg)
 
 The SVG is generated automatically from Garmin FIT files and a private historical activity dataset. This repository contains the complete, reproducible processing pipeline; personal activity records remain in a separate private repository.
 

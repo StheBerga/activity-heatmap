@@ -163,14 +163,14 @@ jobs:
           python python/render_heatmap.py "$RUNNER_TEMP/daily-activities.csv" \
             --timezone Europe/Rome \
             --theme dark \
-            --label "Daily moving time (hours)" \
+            --label "Activity time (hours)" \
             --week-start sunday \
             --steps 0.5 \
             --month-label-font-size 9 \
             --weekday-label-font-size 9 \
-            --output "$GITHUB_WORKSPACE/running-heatmap.svg"
-          test -s running-heatmap.svg
-          grep -q '<svg' running-heatmap.svg
+            --output "$GITHUB_WORKSPACE/activity-heatmap.svg"
+          test -s activity-heatmap.svg
+          grep -q '<svg' activity-heatmap.svg
 
       - name: Remove temporary daily summary
         if: always()

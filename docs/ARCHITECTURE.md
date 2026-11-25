@@ -39,7 +39,7 @@ Public GitHub Actions runner
              Quilt SVG renderer
                         |
                         v
-             running-heatmap.svg
+             activity-heatmap.svg
                         |
                         v
              public repository

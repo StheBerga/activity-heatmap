@@ -31,7 +31,7 @@ patch, or overwrite Quilt's source code.
 
 Edit `ACTIVITY_PALETTE` in that file to customize the colors, ordered from
 lightest (no activity) to darkest (highest activity). The scheduled workflow
-uses the `activity` theme automatically.
+uses the custom theme automatically.
 
 ## Architecture
 

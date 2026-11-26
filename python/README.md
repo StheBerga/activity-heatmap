@@ -42,7 +42,7 @@ At render time, the wrapper registers the project palette in Quilt's documented
 `habit_heatmap.colors.THEMES` dictionary and calls Quilt's Python API. This
 registration exists only in the renderer process: Quilt's source code and
 built-in themes are not modified. The activity workflow selects the local
-`activity` theme by default.
+theme by default.
 
 ## Tests
 

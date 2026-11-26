@@ -8,16 +8,12 @@ from __future__ import annotations
 
 import re
 
-ACTIVITY_THEME_NAME = "activity"
+ACTIVITY_THEME_NAME = "stheberga"
 
 # Starter palette (lightest/no activity -> darkest/highest activity).
 # Replace these five values with your preferred colors when ready.
 ACTIVITY_PALETTE: tuple[str, str, str, str, str] = (
-    "#f0f0f0",
-    "#d6e8f5",
-    "#91c4df",
-    "#438fbd",
-    "#174a75",
+    "#0d1117", "#223e4d", "#386c83", "#4e9ab9", "#64c8f0"
 )
 
 

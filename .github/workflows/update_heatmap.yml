@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-publish:
+  cron-schedule:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -162,7 +162,7 @@ jobs:
         run: |
           python python/render_heatmap.py "$RUNNER_TEMP/daily-activities.csv" \
             --timezone Europe/Rome \
-            --theme activity \
+            --theme stheberga \
             --label "Activity time (hours)" \
             --week-start sunday \
             --steps 0.5 \

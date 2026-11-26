@@ -166,8 +166,9 @@ jobs:
             --label "Activity time (hours)" \
             --week-start sunday \
             --steps 0.5 \
-            --month-label-font-size 9 \
-            --weekday-label-font-size 9 \
+            --month-label-font-size 12 \
+            --weekday-label-font-size 12 \
+            --title-font-size 18 \
             --output "$GITHUB_WORKSPACE/activity-heatmap.svg"
           test -s activity-heatmap.svg
           grep -q '<svg' activity-heatmap.svg

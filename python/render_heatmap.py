@@ -7,6 +7,10 @@ The input CSV contains exactly two columns:
 `moving_time` is the sum of all activity moving durations for that local
 calendar date, expressed in decimal hours. The renderer does not read FIT files
 or activity-level records.
+
+The activity palette is owned by this project (python/activity_palette.py).
+It is registered through Quilt's documented Python API at runtime, leaving the
+Quilt package and its built-in palettes untouched.
 """
 
 from __future__ import annotations
@@ -14,18 +18,25 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import shutil
-import subprocess
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from activity_palette import (
+    ACTIVITY_THEME_NAME,
+    register_activity_palette,
+)
+
 EXPECTED_COLUMNS = ["date", "moving_time"]
 DEFAULT_TIMEZONE = "Europe/Rome"
-INSTALL_HINT = (
-    'Install Quilt with: python -m pip install '
-    '"habit-heatmap @ git+https://github.com/StheBerga/quilt.git"'
+SUPPORTED_THEMES = (
+    ACTIVITY_THEME_NAME,
+    "github",
+    "blue",
+    "purple",
+    "mono",
+    "dark",
 )
 
 
@@ -43,8 +54,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=repository_root / "running-heatmap.svg",
-        help="SVG output path (default: running-heatmap.svg at the repo root).",
+        default=repository_root / "activity-heatmap.svg",
+        help="SVG output path (default: activity-heatmap.svg at the repo root).",
     )
     parser.add_argument(
         "--timezone",
@@ -53,13 +64,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--theme",
-        default="dark",
-        choices=("github", "blue", "purple", "mono", "dark"),
-        help="Quilt colour theme (default: dark).",
+        default=ACTIVITY_THEME_NAME,
+        choices=SUPPORTED_THEMES,
+        help="Quilt palette (default: the project-owned activity palette).",
     )
     parser.add_argument(
         "--label",
-        default="Daily moving time (hours)",
+        default="Activity time (hours)",
         help="Heatmap title/label.",
     )
     parser.add_argument(
@@ -210,6 +221,79 @@ def validate_input_csv(path: Path, start: date, end: date) -> int:
     return rows_seen
 
 
+def parse_steps(raw: str | None) -> float | tuple[float, float, float, float] | None:
+    """Convert the CLI step notation to the format expected by Quilt's API."""
+    if raw is None:
+        return None
+
+    try:
+        values = tuple(float(part.strip()) for part in raw.split(","))
+    except ValueError as exc:
+        raise ValueError("--steps must be one positive number or four comma-separated numbers.") from exc
+
+    if len(values) == 1:
+        return values[0]
+    if len(values) != 4:
+        raise ValueError("--steps must be one positive number or exactly four comma-separated numbers.")
+    return values
+
+
+def render_activity_svg(
+    input_csv: Path,
+    start: date,
+    end: date,
+    *,
+    theme: str = ACTIVITY_THEME_NAME,
+    label: str = "Activity time (hours)",
+    week_start: str = "sunday",
+    steps: str | None = None,
+    month_label_font_size: float = 9,
+    month_label_color: str | None = None,
+    weekday_label_font_size: float = 9,
+    weekday_label_color: str | None = None,
+    title_font_size: float = 14,
+    title_color: str | None = None,
+    legend_font_size: float = 9,
+    legend_color: str | None = None,
+) -> str:
+    """Render a daily CSV with Quilt's Python API and this project's palette."""
+    try:
+        from habit_heatmap import load_events, render_svg
+    except ImportError as exc:
+        raise RuntimeError(
+            "Quilt is not installed. Install the project dependencies with "
+            "'python -m pip install -r python/requirements.txt'."
+        ) from exc
+
+    register_activity_palette()
+
+    # The input contains date-only Europe/Rome calendar dates, so no timezone
+    # conversion is needed when loading the already-aggregated daily records.
+    counts = load_events(
+        input_csv,
+        date_col="date",
+        value_col="moving_time",
+    )
+
+    return render_svg(
+        counts,
+        start=start,
+        end=end,
+        theme=theme,
+        label=label,
+        week_start=week_start,
+        steps=parse_steps(steps),
+        month_label_font_size=month_label_font_size,
+        month_label_color=month_label_color,
+        weekday_label_font_size=weekday_label_font_size,
+        weekday_label_color=weekday_label_color,
+        title_font_size=title_font_size,
+        title_color=title_color,
+        legend_font_size=legend_font_size,
+        legend_color=legend_color,
+    )
+
+
 def main() -> int:
     args = parse_args()
 
@@ -217,91 +301,49 @@ def main() -> int:
         start, end = resolve_window(args)
         input_csv = args.input_csv.expanduser().resolve()
         output_svg = args.output.expanduser().resolve()
-        n_rows = validate_input_csv(input_csv, start, end)
 
-        executable = shutil.which("habit-heatmap")
-        if executable is None:
-            raise RuntimeError(
-                "Could not find the 'habit-heatmap' command on PATH. "
-                + INSTALL_HINT
-            )
+        if output_svg.suffix.lower() != ".svg":
+            raise ValueError("The activity heatmap renderer currently supports SVG output only.")
+
+        n_rows = validate_input_csv(input_csv, start, end)
+        svg = render_activity_svg(
+            input_csv,
+            start,
+            end,
+            theme=args.theme,
+            label=args.label,
+            week_start=args.week_start,
+            steps=args.steps,
+            month_label_font_size=args.month_label_font_size,
+            month_label_color=args.month_label_color,
+            weekday_label_font_size=args.weekday_label_font_size,
+            weekday_label_color=args.weekday_label_color,
+            title_font_size=args.title_font_size,
+            title_color=args.title_color,
+            legend_font_size=args.legend_font_size,
+            legend_color=args.legend_color,
+        )
 
         output_svg.parent.mkdir(parents=True, exist_ok=True)
-
-        command = [
-            executable,
-            str(input_csv),
-            "--date-col",
-            "date",
-            "--value-col",
-            "moving_time",
-            "--tz",
-            args.timezone,
-            "--start",
-            start.isoformat(),
-            "--end",
-            end.isoformat(),
-            "--theme",
-            args.theme,
-            "--label",
-            args.label,
-            "--week-start",
-            args.week_start,
-            "--month-label-font-size",
-            str(args.month_label_font_size),
-            "--weekday-label-font-size",
-            str(args.weekday_label_font_size),
-            "--title-font-size",
-            str(args.title_font_size),
-            "--legend-font-size",
-            str(args.legend_font_size),
-            "-o",
-            str(output_svg),
-            "--verbose",
-        ]
-
-        if args.month_label_color is not None:
-            command.extend(["--month-label-color", args.month_label_color])
-        if args.weekday_label_color is not None:
-            command.extend(["--weekday-label-color", args.weekday_label_color])
-        if args.title_color is not None:
-            command.extend(["--title-color", args.title_color])
-        if args.legend_color is not None:
-            command.extend(["--legend-color", args.legend_color])
-
-        if args.steps is not None:
-            command.extend(["--steps", args.steps])
-
-        subprocess.run(command, check=True)
+        output_svg.write_text(svg, encoding="utf-8")
 
         if not output_svg.is_file() or output_svg.stat().st_size == 0:
             raise RuntimeError(
-                "Quilt finished without producing a non-empty SVG at "
-                f"{output_svg}"
+                f"Quilt finished without producing a non-empty SVG at {output_svg}"
             )
+        if "<svg" not in svg[:2048]:
+            raise RuntimeError(f"Output does not look like an SVG document: {output_svg}")
 
         print(f"Validated daily records: {n_rows}")
         print(
             f"Displayed window: {start.isoformat()} to {end.isoformat()} "
             f"({args.timezone})"
         )
-
-        with output_svg.open("r", encoding="utf-8") as svg_file:
-            header = svg_file.read(2048)
-        if "<svg" not in header:
-            raise RuntimeError(
-                f"Output does not look like an SVG document: {output_svg}"
-            )
-
+        print(f"Palette: {args.theme}")
         print(f"Heatmap: {output_svg}")
         return 0
 
-    except (
-        FileNotFoundError,
-        ValueError,
-        RuntimeError,
-        subprocess.CalledProcessError,
-    ) as exc:
+    except (FileNotFoundError, ValueError, RuntimeError, OSError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 

@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  cron-schedule:
+  build-and-publish:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -31,7 +31,7 @@ jobs:
           date -u
           echo "Rome time:"
           TZ=Europe/Rome date
-          
+
       - name: Check out public pipeline repository
         uses: actions/checkout@v7
 
@@ -94,13 +94,13 @@ jobs:
           cache: pip
           cache-dependency-path: python/requirements.txt
 
-      - name: Test synchronization and renderer helpers
-        run: python -m unittest discover -s python -p 'test_*.py' -v
-
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r python/requirements.txt
+
+      - name: Test synchronization and renderer helpers
+        run: python -m unittest discover -s python -p 'test_*.py' -v
 
       - name: Download FIT activities from Intervals.icu
         env:
@@ -158,11 +158,11 @@ jobs:
         if: always()
         run: rm -rf "$RUNNER_TEMP/intervals-fit"
 
-      - name: Render activity heatmap
+      - name: Render activity heatmap with the project palette
         run: |
           python python/render_heatmap.py "$RUNNER_TEMP/daily-activities.csv" \
             --timezone Europe/Rome \
-            --theme dark \
+            --theme activity \
             --label "Activity time (hours)" \
             --week-start sunday \
             --steps 0.5 \

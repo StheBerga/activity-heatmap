@@ -285,7 +285,8 @@ write_activity_json <- function(
 #'
 #' @return An invisible list containing the daily summary, included activity
 #'   records, FIT file and duplicate counts, parse errors, window limits, and
-#'   CSV path. The summary contains only `date` and `moving_time`.
+#'   CSV and optional JSON paths. The daily summary contains only `date` and
+#'   `moving_time`.
 #' @export
 process_activities <- function(
     activities_dir = "activities",

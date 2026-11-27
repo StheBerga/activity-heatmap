@@ -212,6 +212,40 @@ jobs:
           RS
 
 
+      - name: Remove temporary FIT downloads
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/intervals-fit"
+
+      - name: Render activity heatmap with the project palette with light theme
+        run: |
+          python python/render_heatmap.py "$RUNNER_TEMP/daily-activities.csv" \
+            --timezone Europe/Rome \
+            --theme stheberga-light \
+            --label "Activity time (hours)" \
+            --week-start monday \
+            --steps 0.5 \
+            --month-label-font-size 12 \
+            --weekday-label-font-size 12 \
+            --title-font-size 18 \
+            --output "$GITHUB_WORKSPACE/activity-heatmap-light.svg"
+          test -s activity-heatmap-light.svg
+          grep -q '<svg' activity-heatmap-light.svg
+
+      - name: Render activity heatmap with the project palette with dark theme
+        run: |
+          python python/render_heatmap.py "$RUNNER_TEMP/daily-activities.csv" \
+            --timezone Europe/Rome \
+            --theme stheberga-dark \
+            --label "Activity time (hours)" \
+            --week-start monday \
+            --steps 0.5 \
+            --month-label-font-size 12 \
+            --weekday-label-font-size 12 \
+            --title-font-size 18 \
+            --output "$GITHUB_WORKSPACE/activity-heatmap-dark.svg"
+          test -s activity-heatmap-dark.svg
+          grep -q '<svg' activity-heatmap-dark.svg
+
       - name: Check whether private JSON publishing is configured
         id: private_json_publish
         if: github.ref == 'refs/heads/main'
@@ -258,40 +292,6 @@ jobs:
           fi
           git commit -m "Update daily activity JSON"
           git push origin HEAD:main
-
-      - name: Remove temporary FIT downloads
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/intervals-fit"
-
-      - name: Render activity heatmap with the project palette with light theme
-        run: |
-          python python/render_heatmap.py "$RUNNER_TEMP/daily-activities.csv" \
-            --timezone Europe/Rome \
-            --theme stheberga-light \
-            --label "Activity time (hours)" \
-            --week-start monday \
-            --steps 0.5 \
-            --month-label-font-size 12 \
-            --weekday-label-font-size 12 \
-            --title-font-size 18 \
-            --output "$GITHUB_WORKSPACE/activity-heatmap-light.svg"
-          test -s activity-heatmap-light.svg
-          grep -q '<svg' activity-heatmap-light.svg
-
-      - name: Render activity heatmap with the project palette with dark theme
-        run: |
-          python python/render_heatmap.py "$RUNNER_TEMP/daily-activities.csv" \
-            --timezone Europe/Rome \
-            --theme stheberga-dark \
-            --label "Activity time (hours)" \
-            --week-start monday \
-            --steps 0.5 \
-            --month-label-font-size 12 \
-            --weekday-label-font-size 12 \
-            --title-font-size 18 \
-            --output "$GITHUB_WORKSPACE/activity-heatmap-dark.svg"
-          test -s activity-heatmap-dark.svg
-          grep -q '<svg' activity-heatmap-dark.svg
 
       - name: Remove temporary daily summaries
         if: always()

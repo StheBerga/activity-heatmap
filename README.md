@@ -44,14 +44,15 @@ client, SVG renderer, tests, and GitHub Actions workflows. The workflow also
 exports the same daily moving-time summary as a versioned JSON file to the
 private data repository.
 
-At production time, GitHub Actions checks out only
-`data/historical_activities.csv` from the private
-[running-heatmap-data](https://github.com/StheBerga/running-heatmap-data)
+At production time, GitHub Actions checks out the historical CSV from the
+private [running-heatmap-data](https://github.com/StheBerga/running-heatmap-data)
 repository. It downloads the required original FIT files from Intervals.icu
-into temporary runner storage, builds a daily summary, renders the SVG, and
-publishes only `activity-heatmap.svg`.
+into temporary runner storage, builds one daily moving-time summary, and uses
+that same summary for both outputs: the light/dark SVG heatmaps are published
+here, while the versioned JSON is published to the private data repository.
 
-See [the architecture and privacy notes](docs/ARCHITECTURE.md) for details.
+See [the architecture and privacy notes](docs/ARCHITECTURE.md) and the
+[JSON data contract](docs/JSON_DATA.md) for details.
 
 ## Repository secrets
 
@@ -76,9 +77,10 @@ python -m pip install -r python/requirements.txt
 python -m unittest discover -s python -p 'test_*.py' -v
 ```
 
-R aggregation test (requires R):
+R aggregation and JSON export test (requires R and jsonlite):
 
 ```bash
+Rscript -e 'install.packages("jsonlite")'
 Rscript tests/test_process_activities.R
 ```
 
@@ -89,7 +91,8 @@ this repository.
 
 ## Privacy
 
-The public SVG reveals the dates on which activity occurred and the relative
+The public SVGs reveal the dates on which activity occurred and the relative
 daily moving-time totals. Raw FIT files can contain GPS tracks, timestamps,
 heart-rate data, and device information; they are not published here. The
-historical CSV and all intermediate activity data remain private.
+historical CSV, generated daily JSON, and all intermediate activity data
+remain private.

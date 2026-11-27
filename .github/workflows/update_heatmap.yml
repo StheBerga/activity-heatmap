@@ -164,7 +164,7 @@ jobs:
             --timezone Europe/Rome \
             --theme stheberga-light \
             --label "Activity time (hours)" \
-            --week-start sunday \
+            --week-start monday \
             --steps 0.5 \
             --month-label-font-size 12 \
             --weekday-label-font-size 12 \
@@ -179,7 +179,7 @@ jobs:
             --timezone Europe/Rome \
             --theme stheberga-dark \
             --label "Activity time (hours)" \
-            --week-start sunday \
+            --week-start monday \
             --steps 0.5 \
             --month-label-font-size 12 \
             --weekday-label-font-size 12 \

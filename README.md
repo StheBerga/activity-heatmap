@@ -65,7 +65,7 @@ Configure these Actions secrets in this public repository:
 | `HEATMAP_DATA_WRITE_TOKEN` | Fine-grained GitHub token with **Contents: read and write** access to `StheBerga/running-heatmap-data` only; used only to publish `data/activity_data.json` |
 
 The workflow uses its automatically provided `GITHUB_TOKEN` to update the SVG
-in this repository. The separate `HEATMAP_DATA_WRITE_TOKEN` is used only for
+heatmaps in this repository. The separate `HEATMAP_DATA_WRITE_TOKEN` is used only for
 the JSON commit to the private data repository.
 
 ## Local development
@@ -80,7 +80,7 @@ python -m unittest discover -s python -p 'test_*.py' -v
 R aggregation and JSON export test (requires R and jsonlite):
 
 ```bash
-Rscript -e 'install.packages("jsonlite")'
+Rscript -e 'install.packages("jsonlite", repos = "https://cloud.r-project.org")'
 Rscript tests/test_process_activities.R
 ```
 

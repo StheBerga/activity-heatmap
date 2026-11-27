@@ -60,11 +60,11 @@ then calls the public `load_events` and `render_svg` APIs.
 
 No files in the Quilt repository are modified. Quilt retains its own independent
 built-in themes; the custom theme exists only while this project renders its
-heatmap. The workflow selects the `activity` theme explicitly.
+heatmap. The workflow selects the project-owned light and dark themes explicitly.
 
 ## Secrets and permissions
 
-Configure two repository Actions secrets in the public repository:
+Configure these repository Actions secrets in the public repository:
 
 - `INTERVALS_API_KEY`: personal Intervals.icu API key.
 - `HEATMAP_DATA_READ_TOKEN`: fine-grained GitHub token scoped to
@@ -75,7 +75,9 @@ Configure two repository Actions secrets in the public repository:
   permission. It is used only to publish `data/activity_data.json`.
 
 The workflow's `GITHUB_TOKEN` has Contents write permission for the public
-repository so it can commit the SVG. No personal publishing token is needed.
+repository and is used only for the public SVGs. The separate
+`HEATMAP_DATA_WRITE_TOKEN` is used only for the private JSON file; it is not
+used to write to the public repository.
 
 The separate CI workflow has read-only repository permissions, installs the
 same Quilt dependency as production, uses synthetic fixtures, and does not
@@ -86,8 +88,8 @@ check out private data or access secrets.
 The historical CSV, generated daily JSON, downloaded FIT files, activity-level
 rows, and intermediate daily CSV remain private. FIT files and temporary
 summaries exist only on the ephemeral GitHub Actions runner during a production
-run. Only the rendered SVG is committed publicly. FIT files can contain precise GPS traces, timestamps,
-heart-rate records, and device metadata.
+run. Only the rendered SVGs are committed publicly. FIT files can contain
+precise GPS traces, timestamps, heart-rate records, and device metadata.
 
 The SVG itself reveals dates with activity and relative daily moving-time
 totals. This is the intentionally public output.

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - activity-JSON
   pull_request:
     branches:
       - main
@@ -38,5 +39,8 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: Run synthetic R aggregation test
+      - name: Install R test dependencies
+        run: Rscript -e 'install.packages("jsonlite", repos = "https://cloud.r-project.org")'
+
+      - name: Run synthetic R aggregation and JSON export tests
         run: Rscript tests/test_process_activities.R

@@ -5,7 +5,7 @@
 | Repository | Visibility | Responsibility |
 | --- | --- | --- |
 | `StheBerga/activity-heatmap` | Public | R/Python source code, tests, workflows, documentation, rendered SVG |
-| `StheBerga/running-heatmap-data` | Private | Historical activity CSV only |
+| `StheBerga/running-heatmap-data` | Private | Historical activity CSV and generated daily JSON |
 
 The public workflow checks out only `data/historical_activities.csv` from the
 private repository. Original FIT files are downloaded directly from
@@ -38,15 +38,17 @@ Public GitHub Actions runner
              temporary daily CSV
              date,moving_time (hours)
                         |
-                        v
-             Quilt Python API
-             project palette registered
-                        |
-                        v
-             activity-heatmap.svg
-                        |
-                        v
-             public repository
+              +---------+----------+
+              |                    |
+              v                    v
+       Quilt Python API      versioned JSON export
+       project palette      365 dates, zero-filled
+              |                    |
+              v                    v
+      activity-heatmap.svg   private data repository
+              |
+              v
+       public repository
 ```
 
 ## Palette ownership
@@ -58,19 +60,24 @@ then calls the public `load_events` and `render_svg` APIs.
 
 No files in the Quilt repository are modified. Quilt retains its own independent
 built-in themes; the custom theme exists only while this project renders its
-heatmap. The workflow selects the `activity` theme explicitly.
+heatmap. The workflow selects the project-owned light and dark themes explicitly.
 
 ## Secrets and permissions
 
-Configure two repository Actions secrets in the public repository:
+Configure these repository Actions secrets in the public repository:
 
 - `INTERVALS_API_KEY`: personal Intervals.icu API key.
 - `HEATMAP_DATA_READ_TOKEN`: fine-grained GitHub token scoped to
   `StheBerga/running-heatmap-data`, with repository Contents read permission
   only.
+- `HEATMAP_DATA_WRITE_TOKEN`: separate fine-grained GitHub token scoped to
+  `StheBerga/running-heatmap-data`, with repository Contents read and write
+  permission. It is used only to publish `data/activity_data.json`.
 
 The workflow's `GITHUB_TOKEN` has Contents write permission for the public
-repository so it can commit the SVG. No personal publishing token is needed.
+repository and is used only for the public SVGs. The separate
+`HEATMAP_DATA_WRITE_TOKEN` is used only for the private JSON file; it is not
+used to write to the public repository.
 
 The separate CI workflow has read-only repository permissions, installs the
 same Quilt dependency as production, uses synthetic fixtures, and does not
@@ -78,11 +85,11 @@ check out private data or access secrets.
 
 ## Privacy boundary
 
-The historical CSV, downloaded FIT files, activity-level rows, and intermediate
-daily CSV remain private. FIT files and temporary summaries exist only on the
-ephemeral GitHub Actions runner during a production run. Only the rendered SVG
-is committed publicly. FIT files can contain precise GPS traces, timestamps,
-heart-rate records, and device metadata.
+The historical CSV, generated daily JSON, downloaded FIT files, activity-level
+rows, and intermediate daily CSV remain private. FIT files and temporary
+summaries exist only on the ephemeral GitHub Actions runner during a production
+run. Only the rendered SVGs are committed publicly. FIT files can contain
+precise GPS traces, timestamps, heart-rate records, and device metadata.
 
 The SVG itself reveals dates with activity and relative daily moving-time
 totals. This is the intentionally public output.
@@ -94,3 +101,16 @@ use `total_timer_time`, in seconds. Historical CSV rows use numeric seconds.
 Durations are summed across all activities on each Europe/Rome calendar date.
 The daily total is divided by 3600 to provide Quilt with decimal hours. The
 rendered calendar covers 365 dates, including the current local date.
+
+
+## Daily JSON export
+
+R writes data/activity_data.json from the exact same daily summary used by
+the SVG renderer. The file contains a versioned schema, a UTC generation
+timestamp, the Europe/Rome calendar timezone, the 365-day window boundaries,
+and one entry for every date in the window. Dates without activity have
+moving_time: 0; active dates retain the daily total in decimal hours.
+
+See JSON_DATA.md for the complete structure and validation rules. The JSON is
+committed only to the private data repository. Publishing is skipped until
+HEATMAP_DATA_WRITE_TOKEN is configured.

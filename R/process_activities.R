@@ -110,6 +110,157 @@
   )
 }
 
+
+#' Write the daily moving-time summary as a versioned JSON document
+#'
+#' The JSON is expanded to every calendar date in the requested window.
+#' Dates without activity receive a moving_time value of zero.
+#'
+#' @param summary Daily active-date summary with exactly date and moving_time
+#'   columns. Moving time is expressed in decimal hours.
+#' @param window Named character vector with start and end ISO dates.
+#' @param timezone Timezone associated with the calendar dates.
+#' @param output_file Destination JSON file.
+#' @param generated_at Timestamp used for the generated_at field.
+#'
+#' @return The normalized path to the written JSON file.
+#' @export
+write_activity_json <- function(
+    summary,
+    window,
+    timezone,
+    output_file,
+    generated_at = Sys.time()) {
+
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Package jsonlite is required to write the activity JSON.", call. = FALSE)
+  }
+
+  if (!is.data.frame(summary) ||
+      !identical(names(summary), c("date", "moving_time"))) {
+    stop(
+      "summary must be a data frame with exactly date and moving_time columns.",
+      call. = FALSE
+    )
+  }
+
+  if (!is.character(window) || is.null(names(window)) ||
+      !all(c("start", "end") %in% names(window))) {
+    stop("window must contain named start and end dates.", call. = FALSE)
+  }
+
+  parse_window_date <- function(value, label) {
+    if (length(value) != 1L || is.na(value)) {
+      stop("Window ", label, " date must be one YYYY-MM-DD value.", call. = FALSE)
+    }
+    parsed <- as.Date(value, format = "%Y-%m-%d")
+    if (is.na(parsed) || format(parsed, "%Y-%m-%d") != value) {
+      stop("Window ", label, " date must use YYYY-MM-DD.", call. = FALSE)
+    }
+    parsed
+  }
+
+  start_date <- parse_window_date(window[["start"]], "start")
+  end_date <- parse_window_date(window[["end"]], "end")
+  if (start_date > end_date) {
+    stop("Window start date must be on or before its end date.", call. = FALSE)
+  }
+
+  if (!is.character(timezone) || length(timezone) != 1L ||
+      is.na(timezone) || !timezone %in% OlsonNames()) {
+    stop("Unknown timezone: ", timezone, call. = FALSE)
+  }
+
+  if (!is.character(output_file) || length(output_file) != 1L ||
+      is.na(output_file) || !nzchar(output_file)) {
+    stop("output_file must be one non-empty path.", call. = FALSE)
+  }
+
+  if (!is.character(summary$date)) {
+    stop("Summary dates must be character values in YYYY-MM-DD format.", call. = FALSE)
+  }
+  activity_dates <- as.Date(summary$date, format = "%Y-%m-%d")
+  invalid_date <- is.na(activity_dates)
+  if (any(!invalid_date)) {
+    invalid_date[!invalid_date] <-
+      format(activity_dates[!invalid_date], "%Y-%m-%d") != summary$date[!invalid_date]
+  }
+  if (any(invalid_date)) {
+    stop("Summary contains an invalid date; expected YYYY-MM-DD.", call. = FALSE)
+  }
+
+  if (!is.numeric(summary$moving_time)) {
+    stop("Summary moving_time values must be numeric hours.", call. = FALSE)
+  }
+  moving_time <- as.numeric(summary$moving_time)
+  invalid_duration <- !is.finite(moving_time) | moving_time <= 0
+  if (any(invalid_duration)) {
+    stop("Summary moving_time values must be finite and greater than zero.", call. = FALSE)
+  }
+
+  if (anyDuplicated(activity_dates)) {
+    stop("Summary contains duplicate daily dates.", call. = FALSE)
+  }
+  if (any(activity_dates < start_date | activity_dates > end_date)) {
+    stop("Summary contains dates outside the requested window.", call. = FALSE)
+  }
+
+  generated_at <- tryCatch(
+    as.POSIXct(generated_at, tz = "UTC"),
+    error = function(e) as.POSIXct(NA, tz = "UTC")
+  )
+  if (length(generated_at) != 1L || is.na(generated_at)) {
+    stop("generated_at must resolve to one valid timestamp.", call. = FALSE)
+  }
+  generated_at_text <- format(
+    generated_at,
+    format = "%Y-%m-%dT%H:%M:%SZ",
+    tz = "UTC",
+    usetz = FALSE
+  )
+
+  all_dates <- seq.Date(start_date, end_date, by = "day")
+  all_date_text <- format(all_dates, "%Y-%m-%d")
+  all_moving_time <- numeric(length(all_dates))
+  if (length(activity_dates) > 0L) {
+    date_indices <- match(format(activity_dates, "%Y-%m-%d"), all_date_text)
+    all_moving_time[date_indices] <- moving_time
+  }
+
+  days <- lapply(seq_along(all_dates), function(i) {
+    list(
+      date = all_date_text[[i]],
+      moving_time = as.numeric(all_moving_time[[i]])
+    )
+  })
+
+  payload <- list(
+    schema_version = 1L,
+    generated_at = generated_at_text,
+    timezone = timezone,
+    window = list(
+      start = format(start_date, "%Y-%m-%d"),
+      end = format(end_date, "%Y-%m-%d")
+    ),
+    days = days
+  )
+
+  dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
+  jsonlite::write_json(
+    payload,
+    path = output_file,
+    auto_unbox = TRUE,
+    pretty = TRUE,
+    digits = NA
+  )
+
+  if (!file.exists(output_file) || file.info(output_file)$size == 0L) {
+    stop("Activity JSON was not written successfully.", call. = FALSE)
+  }
+
+  normalizePath(output_file, mustWork = TRUE)
+}
+
 #' Process FIT and historical records into a daily activity-time summary
 #'
 #' @param activities_dir Directory containing FIT files. Discovery is
@@ -124,13 +275,18 @@
 #'   calendar dates and are not timezone-shifted.
 #' @param output_file CSV destination. When `NULL`, writes
 #'   `daily-activities.csv` to `$RUNNER_TEMP` or, locally, `tempdir()`.
+#' @param json_output_file Optional JSON destination. When supplied, the JSON
+#'   is generated from the same daily summary as the CSV and includes every
+#'   date in the rolling window, with zero for inactive dates.
+#' @param generated_at Timestamp used in the JSON generated_at field.
 #' @param as_of Reference date/time for the rolling window. Defaults to the
 #'   current instant. Exposed to make local tests reproducible.
 #' @param quiet Suppress progress messages and warnings about individual files.
 #'
 #' @return An invisible list containing the daily summary, included activity
 #'   records, FIT file and duplicate counts, parse errors, window limits, and
-#'   CSV path. The summary contains only `date` and `moving_time`.
+#'   CSV and optional JSON paths. The daily summary contains only `date` and
+#'   `moving_time`.
 #' @export
 process_activities <- function(
     activities_dir = "activities",
@@ -139,7 +295,9 @@ process_activities <- function(
     timezone = "Europe/Rome",
     output_file = NULL,
     as_of = Sys.time(),
-    quiet = FALSE) {
+    quiet = FALSE,
+    json_output_file = NULL,
+    generated_at = Sys.time()) {
 
   if (!dir.exists(activities_dir)) {
     stop("Activities directory does not exist: ", activities_dir,
@@ -328,6 +486,17 @@ process_activities <- function(
     na = ""
   )
 
+  json_output_path <- NULL
+  if (!is.null(json_output_file)) {
+    json_output_path <- write_activity_json(
+      summary = daily_summary,
+      window = c(start = as.character(start_date), end = as.character(end_date)),
+      timezone = timezone,
+      output_file = json_output_file,
+      generated_at = generated_at
+    )
+  }
+
   n_fit_in_window <- sum(all_activities$source == "fit")
   n_historical_in_window <- sum(all_activities$source == "historical_csv")
 
@@ -363,7 +532,8 @@ process_activities <- function(
     duplicate_activities_skipped = duplicate_activity_count,
     parse_errors = parse_errors,
     window = c(start = as.character(start_date), end = as.character(end_date)),
-    output_file = normalizePath(output_file, mustWork = TRUE)
+    output_file = normalizePath(output_file, mustWork = TRUE),
+    json_output_file = json_output_path
   ))
 }
 

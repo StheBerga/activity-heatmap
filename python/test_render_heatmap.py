@@ -9,9 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from activity_palette import (
-    ACTIVITY_PALETTE,
-    ACTIVITY_THEME_NAME,
-    validate_activity_palette,
+    ACTIVITY_DEFAULT_THEME,
+    ACTIVITY_THEMES,
+    validate_activity_palettes,
 )
 from render_heatmap import (
     parse_args,
@@ -56,16 +56,47 @@ class RenderValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Pass both"):
             resolve_window(args)
 
-    def test_default_cli_theme_is_project_palette(self):
-        with patch("sys.argv", ["render_heatmap.py", "daily.csv"]):
-            args = parse_args()
-        self.assertEqual(args.theme, ACTIVITY_THEME_NAME)
+def test_default_cli_theme_is_project_palette(self):
+    with patch("sys.argv", ["render_heatmap.py", "daily.csv"]):
+        args = parse_args()
 
-    def test_palette_contains_five_six_digit_hex_colors(self):
-        validate_activity_palette()
-        self.assertEqual(len(ACTIVITY_PALETTE), 5)
-        for color in ACTIVITY_PALETTE:
-            self.assertRegex(color, r"^#[0-9a-fA-F]{6}$")
+    self.assertEqual(args.theme, ACTIVITY_DEFAULT_THEME)
+
+
+def test_both_palettes_contain_five_valid_hex_colors(self):
+    validate_activity_palettes()
+
+    self.assertEqual(len(ACTIVITY_THEMES), 2)
+
+    for theme_name, palette in ACTIVITY_THEMES.items():
+        with self.subTest(theme=theme_name):
+            self.assertEqual(len(palette), 5)
+
+            for color in palette:
+                self.assertRegex(color, r"^#[0-9a-fA-F]{6}$")
+                
+    def test_both_custom_palettes_are_used_in_rendered_svg(self):
+        for theme_name, palette in ACTIVITY_THEMES.items():
+            with self.subTest(theme=theme_name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    path = Path(temp_dir) / "daily.csv"
+                    path.write_text(
+                    "date,moving_time\n"
+                    "2026-11-23,0.25\n"
+                    "2026-11-24,2.0\n",
+                    encoding="utf-8",
+                )
+
+                svg = render_activity_svg(
+                    path,
+                    date(2026, 11, 23),
+                    date(2026, 11, 24),
+                    theme=theme_name,
+                    steps="0.5",
+                )
+
+            for color in palette:
+                self.assertIn(color, svg)
 
     def test_steps_are_converted_to_quilt_api_values(self):
         self.assertEqual(parse_steps("0.5"), 0.5)
@@ -73,25 +104,6 @@ class RenderValidationTests(unittest.TestCase):
         self.assertIsNone(parse_steps(None))
         with self.assertRaisesRegex(ValueError, "exactly four"):
             parse_steps("1,2")
-
-    def test_custom_palette_is_used_in_rendered_svg(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "daily.csv"
-            path.write_text(
-                "date,moving_time\n"
-                "2026-11-23,0.25\n"
-                "2026-11-24,2.0\n",
-                encoding="utf-8",
-            )
-            svg = render_activity_svg(
-                path,
-                date(2026, 11, 23),
-                date(2026, 11, 24),
-                steps="0.5",
-            )
-
-        for color in ACTIVITY_PALETTE:
-            self.assertIn(color, svg)
 
 
 if __name__ == "__main__":

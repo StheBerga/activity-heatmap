@@ -2,7 +2,8 @@
 
 A GitHub-style calendar showing daily timer-active physical activity time.
 
-![Activity heatmap](activity-heatmap.svg)
+![Activity heatmap dark](activity-heatmap-dark.svg)
+![Activity heatmap light](activity-heatmap-light.svg)
 
 The heatmap is generated from Garmin FIT files downloaded from Intervals.icu
 and a private historical activity dataset. This repository contains the complete,
@@ -29,9 +30,12 @@ registered with Quilt's documented Python API at render time. Quilt remains a
 standalone package with its own built-in themes; this repository does not fork,
 patch, or overwrite Quilt's source code.
 
-Edit `ACTIVITY_PALETTE` in that file to customize the colors, ordered from
-lightest (no activity) to darkest (highest activity). The scheduled workflow
-uses the custom theme automatically.
+The file defines two project-owned palettes: `stheberga-light` and
+`stheberga-dark`. Each contains five colors, ordered from no activity to
+highest activity. The default palette is `stheberga-dark`.
+
+The scheduled workflow selects its palette through the `--theme` argument.
+Change this to `stheberga-light` to use the light version.
 
 ## Architecture
 

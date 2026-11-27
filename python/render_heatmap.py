@@ -24,14 +24,15 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from activity_palette import (
-    ACTIVITY_THEME_NAME,
-    register_activity_palette,
+    ACTIVITY_DEFAULT_THEME,
+    ACTIVITY_THEMES,
+    register_activity_palettes,
 )
 
 EXPECTED_COLUMNS = ["date", "moving_time"]
 DEFAULT_TIMEZONE = "Europe/Rome"
 SUPPORTED_THEMES = (
-    ACTIVITY_THEME_NAME,
+    *ACTIVITY_THEMES,
     "github",
     "blue",
     "purple",
@@ -63,10 +64,10 @@ def parse_args() -> argparse.Namespace:
         help=f"IANA timezone used for the displayed calendar (default: {DEFAULT_TIMEZONE}).",
     )
     parser.add_argument(
-        "--theme",
-        default=ACTIVITY_THEME_NAME,
-        choices=SUPPORTED_THEMES,
-        help="Quilt palette (default: the project-owned activity palette).",
+    "--theme",
+    default=ACTIVITY_DEFAULT_THEME,
+    choices=SUPPORTED_THEMES,
+    help="Color palette to use for the heatmap.",
     )
     parser.add_argument(
         "--label",
@@ -243,7 +244,7 @@ def render_activity_svg(
     start: date,
     end: date,
     *,
-    theme: str = ACTIVITY_THEME_NAME,
+    theme: str = ACTIVITY_DEFAULT_THEME,
     label: str = "Activity time (hours)",
     week_start: str = "sunday",
     steps: str | None = None,
@@ -265,7 +266,7 @@ def render_activity_svg(
             "'python -m pip install -r python/requirements.txt'."
         ) from exc
 
-    register_activity_palette()
+    register_activity_palettes()
 
     # The input contains date-only Europe/Rome calendar dates, so no timezone
     # conversion is needed when loading the already-aggregated daily records.

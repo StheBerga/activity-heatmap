@@ -40,7 +40,9 @@ Change this to `stheberga-light` to use the light version.
 ## Architecture
 
 The public repository contains the R processing code, Python Intervals.icu
-client, SVG renderer, tests, and GitHub Actions workflows.
+client, SVG renderer, tests, and GitHub Actions workflows. The workflow also
+exports the same daily moving-time summary as a versioned JSON file to the
+private data repository.
 
 At production time, GitHub Actions checks out only
 `data/historical_activities.csv` from the private
@@ -59,9 +61,11 @@ Configure these Actions secrets in this public repository:
 | --- | --- |
 | `INTERVALS_API_KEY` | Personal Intervals.icu API key with access to activity files |
 | `HEATMAP_DATA_READ_TOKEN` | Fine-grained GitHub token with **Contents: read** access to `StheBerga/running-heatmap-data` only |
+| `HEATMAP_DATA_WRITE_TOKEN` | Fine-grained GitHub token with **Contents: read and write** access to `StheBerga/running-heatmap-data` only; used only to publish `data/activity_data.json` |
 
 The workflow uses its automatically provided `GITHUB_TOKEN` to update the SVG
-in this repository. No separate publishing token is required.
+in this repository. The separate `HEATMAP_DATA_WRITE_TOKEN` is used only for
+the JSON commit to the private data repository.
 
 ## Local development
 

@@ -79,8 +79,8 @@ jobs:
             grimbough = "https://grimbough.r-universe.dev",
             CRAN = "https://cloud.r-project.org"
           ))
-          install.packages(c("FITfileR", "dplyr"))
-          for (package in c("FITfileR", "dplyr")) {
+          install.packages(c("FITfileR", "dplyr", "jsonlite"))
+          for (package in c("FITfileR", "dplyr", "jsonlite")) {
             if (!requireNamespace(package, quietly = TRUE)) {
               stop(package, " installation failed.", call. = FALSE)
             }
@@ -123,12 +123,16 @@ jobs:
           output_file <- file.path(
             Sys.getenv("RUNNER_TEMP"), "daily-activities.csv"
           )
+          json_output_file <- file.path(
+            Sys.getenv("RUNNER_TEMP"), "activity_data.json"
+          )
           result <- process_activities(
             activities_dir = Sys.getenv("ACTIVITIES_DIR"),
             historical_csv = "private-data/data/historical_activities.csv",
             window_days = 365L,
             timezone = "Europe/Rome",
-            output_file = output_file
+            output_file = output_file,
+            json_output_file = json_output_file
           )
 
           if (nrow(result$parse_errors) > 0L) {
@@ -142,6 +146,57 @@ jobs:
           if (!file.exists(output_file) || file.info(output_file)$size == 0L) {
             stop("Daily activity CSV was not created.", call. = FALSE)
           }
+          if (!file.exists(json_output_file) ||
+              file.info(json_output_file)$size == 0L) {
+            stop("Daily activity JSON was not created.", call. = FALSE)
+          }
+
+          payload <- jsonlite::fromJSON(json_output_file, simplifyVector = FALSE)
+          required_fields <- c(
+            "schema_version", "generated_at", "timezone", "window", "days"
+          )
+          if (!identical(names(payload), required_fields) ||
+              as.integer(payload$schema_version) != 1L ||
+              !identical(payload$timezone, "Europe/Rome") ||
+              !identical(payload$window$start, result$window[["start"]]) ||
+              !identical(payload$window$end, result$window[["end"]])) {
+            stop("Activity JSON metadata does not match the expected schema.", call. = FALSE)
+          }
+
+          json_dates <- vapply(payload$days, function(day) day$date, character(1))
+          json_values <- vapply(
+            payload$days, function(day) day$moving_time, numeric(1)
+          )
+          expected_dates <- format(
+            seq.Date(
+              as.Date(result$window[["start"]]),
+              as.Date(result$window[["end"]]),
+              by = "day"
+            ),
+            "%Y-%m-%d"
+          )
+          if (!identical(json_dates, expected_dates) ||
+              length(json_dates) != 365L ||
+              any(!is.finite(json_values)) ||
+              any(json_values < 0)) {
+            stop("Activity JSON does not contain 365 valid consecutive dates.", call. = FALSE)
+          }
+
+          csv_daily <- utils::read.csv(output_file, stringsAsFactors = FALSE)
+          expected_values <- numeric(length(json_dates))
+          csv_indices <- match(csv_daily$date, json_dates)
+          if (anyNA(csv_indices)) {
+            stop("Daily CSV contains a date missing from the JSON calendar.", call. = FALSE)
+          }
+          expected_values[csv_indices] <- csv_daily$moving_time
+          if (!isTRUE(all.equal(
+            json_values,
+            expected_values,
+            tolerance = 1e-12,
+            check.attributes = FALSE
+          ))) {
+            stop("JSON daily values do not match the R-generated CSV.", call. = FALSE)
+          }
 
           cat(
             "FIT activities in window:", nrow(result$fit_activities), "\n",
@@ -150,9 +205,59 @@ jobs:
             "Total activities in window:", nrow(result$activities), "\n",
             "Active days:", nrow(result$summary), "\n",
             "Window:", result$window[["start"]], "to",
-            result$window[["end"]], "\n"
+            result$window[["end"]], "\n",
+            "JSON dates:", length(json_dates), "\n",
+            "JSON:", json_output_file, "\n"
           )
           RS
+
+
+      - name: Check whether private JSON publishing is configured
+        id: private_json_publish
+        if: github.ref == 'refs/heads/main'
+        env:
+          HEATMAP_DATA_WRITE_TOKEN: ${{ secrets.HEATMAP_DATA_WRITE_TOKEN }}
+        shell: bash
+        run: |
+          if [[ -n "$HEATMAP_DATA_WRITE_TOKEN" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Private JSON publishing is enabled."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "HEATMAP_DATA_WRITE_TOKEN is not configured; private JSON publishing is skipped."
+          fi
+
+      - name: Check out private repository for JSON publishing
+        if: github.ref == 'refs/heads/main' && steps.private_json_publish.outputs.enabled == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: StheBerga/running-heatmap-data
+          ref: main
+          token: ${{ secrets.HEATMAP_DATA_WRITE_TOKEN }}
+          path: private-data-write
+          persist-credentials: true
+          sparse-checkout: |
+            data/historical_activities.csv
+            data/activity_data.json
+          sparse-checkout-cone-mode: false
+
+      - name: Publish daily activity JSON to the private repository
+        if: github.ref == 'refs/heads/main' && steps.private_json_publish.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          mkdir -p private-data-write/data
+          cp "$RUNNER_TEMP/activity_data.json" \
+            private-data-write/data/activity_data.json
+          cd private-data-write
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data/activity_data.json
+          if git diff --cached --quiet; then
+            echo "The private activity JSON is unchanged; nothing to publish."
+            exit 0
+          fi
+          git commit -m "Update daily activity JSON"
+          git push origin HEAD:main
 
       - name: Remove temporary FIT downloads
         if: always()
@@ -188,11 +293,14 @@ jobs:
           test -s activity-heatmap-dark.svg
           grep -q '<svg' activity-heatmap-dark.svg
 
-      - name: Remove temporary daily summary
+      - name: Remove temporary daily summaries
         if: always()
-        run: rm -f "$RUNNER_TEMP/daily-activities.csv"
+        run: |
+          rm -f "$RUNNER_TEMP/daily-activities.csv"
+          rm -f "$RUNNER_TEMP/activity_data.json"
 
       - name: Publish only the SVG to main
+        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
